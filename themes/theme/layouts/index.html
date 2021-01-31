@@ -1,0 +1,18 @@
+{{ partial "header.html" . }}
+
+<section id="dashboard">
+  <ul>
+    {{ range .Data.Pages.ByPublishDate.Reverse }}
+      <div class="posts">
+        <div id=date class="date-time-title">
+            <time>{{ .Date.Format (.Site.Params.dateform | default "02 Jan 06") }}</time>
+        </div>
+        <div class="date-time-title post">
+          <a href="{{ .Permalink }}">{{ .Title }}</a>
+        </div>
+      </div>
+    {{ end }}
+  </ul>
+</section>
+
+{{ partial "footer.html" . }}
