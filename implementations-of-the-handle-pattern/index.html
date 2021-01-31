@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="https://fonts.googleapis.com/css?family=Ubuntu" rel="stylesheet">
+        <title>Implementations of the Handle pattern</title>
+        <link rel="stylesheet" href="/css/stylesheet.css">
+    </head>
+    <body>
+        <section id="page-title">
+            <h1><a href="/">¯\_(ツ)_/¯</a></h1>
+        </section>
+
+
+
+<section class="blog-post">
+    <h1>Implementations of the Handle pattern</h1>
+    <div class="blog-post-subheader">
+        January 31, 2021
+    </div>
+    <div class="blog-post-content">
+        <p>In <a href="https://blog.ocharles.org.uk/posts/2020-12-23-monad-transformers-and-effects-with-backpack.html">&ldquo;Monad Transformers and Effects with Backpack&rdquo;</a>, <a href="https://twitter.com/acid2">@acid2</a> presented how to apply Backpack to monad transformers. There is a less-popular approach to deal with effects — <a href="https://jaspervdj.be/posts/2018-03-08-handle-pattern.html">Handle</a> (<a href="https://www.schoolofhaskell.com/user/meiersi/the-service-pattern">Service</a>) pattern. I recommend reading both posts at first since they answer many questions regarding the design decisions behind the Handle pattern (why <code>IO</code>, why not type classes, etc). In this post, I want to show different implementations of the Handle pattern and compare them. All examples described below are available <a href="https://github.com/ak3n/handle-examples">in this repository</a>.</p>
+<h3 id="when-you-might-need-the-handle-pattern-simplehttpsgithubcomak3nhandle-examplestreemainsimple">When you might need the Handle pattern [<a href="https://github.com/ak3n/handle-examples/tree/main/simple">simple</a>]&nbsp;<a class="headline-hash" href="#when-you-might-need-the-handle-pattern-simplehttpsgithubcomak3nhandle-examplestreemainsimple">#</a> </h3>
+<p>Suppose we have a domain logic with a side effect:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> WeatherReporter <span style="color:#00f">where</span>
+
+<span style="color:#00f">import</span> <span style="color:#00f">qualified</span> WeatherProvider
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">WeatherReport</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+
+<span style="color:#008000">-- | Domain logic. Usually some pure code that might use mtl, free monads, etc.</span>
+createWeatherReport <span style="color:#00f">::</span> <span style="color:#2b91af">WeatherProvider</span>.<span style="color:#2b91af">WeatherData</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">WeatherReport</span>
+createWeatherReport (<span style="color:#2b91af">WeatherProvider</span>.<span style="color:#2b91af">WeatherData</span> temp) <span style="color:#00f">=</span>
+  <span style="color:#a31515">&#34;The current temperature in London is &#34;</span> ++ (show temp)
+
+<span style="color:#008000">-- | Domain logic that uses external dependency to get data and process it.</span>
+getCurrentWeatherReportInLondon <span style="color:#00f">::</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherReport</span>
+getCurrentWeatherReportInLondon <span style="color:#00f">=</span> <span style="color:#00f">do</span>
+  weatherData <span style="color:#00f">&lt;-</span> <span style="color:#2b91af">WeatherProvider</span>.getWeatherData <span style="color:#a31515">&#34;London&#34;</span> <span style="color:#a31515">&#34;now&#34;</span>
+  return $ createWeatherReport weatherData
+</code></pre></td></tr></table>
+</div>
+</div><div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> WeatherProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Temperature</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Int</span>
+<span style="color:#00f">data</span> <span style="color:#2b91af">WeatherData</span> <span style="color:#00f">=</span> <span style="color:#2b91af">WeatherData</span> { temperature <span style="color:#00f">::</span> <span style="color:#2b91af">Temperature</span> }
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+<span style="color:#00f">type</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+
+<span style="color:#008000">-- | This is some concrete implementation.</span>
+<span style="color:#008000">-- In this example we return a constant value.</span>
+getWeatherData <span style="color:#00f">::</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherData</span>
+getWeatherData <span style="color:#00f">_</span> <span style="color:#00f">_</span> <span style="color:#00f">=</span> return $ <span style="color:#2b91af">WeatherData</span> 30
+</code></pre></td></tr></table>
+</div>
+</div><p>At some point in time, there appeared a need for tests to ensure that the domain logic is correct. There are different ways to do that:</p>
+<ul>
+<li>integration tests</li>
+<li>stub implementation of the service</li>
+<li>minimize the logic with side effects moving as much as possible to pure functions for proper unit testing</li>
+<li>maybe something else</li>
+</ul>
+<p>All solutions have their pros and cons and the final choice depends on many factors — especially on the number of side effects and how they interact with each other. We are interested in how to achieve the second one with the Handle pattern.</p>
+<h3 id="simple-handle-simple-handlehttpsgithubcomak3nhandle-examplestreemainsimple-handle">Simple Handle [<a href="https://github.com/ak3n/handle-examples/tree/main/simple-handle">simple-handle</a>]&nbsp;<a class="headline-hash" href="#simple-handle-simple-handlehttpsgithubcomak3nhandle-examplestreemainsimple-handle">#</a> </h3>
+<p>Let&rsquo;s start with a simple Handle that doesn&rsquo;t support multiple implementations.
+Here is the updated domain logic:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> WeatherReporter <span style="color:#00f">where</span>
+
+<span style="color:#00f">import</span> <span style="color:#00f">qualified</span> WeatherProvider
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">WeatherReport</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+
+<span style="color:#008000">-- | We hide dependencies in the handle</span>
+<span style="color:#00f">data</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Handle</span> { weatherProvider <span style="color:#00f">::</span> <span style="color:#2b91af">WeatherProvider</span>.<span style="color:#2b91af">Handle</span> }
+
+<span style="color:#008000">-- | Constructor for Handle</span>
+new <span style="color:#00f">::</span> <span style="color:#2b91af">WeatherProvider</span>.<span style="color:#2b91af">Handle</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Handle</span>
+new <span style="color:#00f">=</span> <span style="color:#2b91af">Handle</span>
+
+<span style="color:#008000">-- | Domain logic. Usually some pure code that might use mtl, free monads, etc.</span>
+createWeatherReport <span style="color:#00f">::</span> <span style="color:#2b91af">WeatherProvider</span>.<span style="color:#2b91af">WeatherData</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">WeatherReport</span>
+createWeatherReport (<span style="color:#2b91af">WeatherProvider</span>.<span style="color:#2b91af">WeatherData</span> temp) <span style="color:#00f">=</span>
+  <span style="color:#a31515">&#34;The current temperature in London is &#34;</span> ++ (show temp)
+
+<span style="color:#008000">-- | Domain logic that uses external dependency to get data and process it.</span>
+getCurrentWeatherReportInLondon <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherReport</span>
+getCurrentWeatherReportInLondon (<span style="color:#2b91af">Handle</span> wph) <span style="color:#00f">=</span> <span style="color:#00f">do</span>
+  weatherData <span style="color:#00f">&lt;-</span> <span style="color:#2b91af">WeatherProvider</span>.getWeatherData wph <span style="color:#a31515">&#34;London&#34;</span> <span style="color:#a31515">&#34;now&#34;</span>
+  return $ createWeatherReport weatherData
+
+</code></pre></td></tr></table>
+</div>
+</div><p>And the implementation of the <code>WeatherProvider</code>:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> WeatherProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Temperature</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Int</span>
+<span style="color:#00f">data</span> <span style="color:#2b91af">WeatherData</span> <span style="color:#00f">=</span> <span style="color:#2b91af">WeatherData</span> { temperature <span style="color:#00f">::</span> <span style="color:#2b91af">Temperature</span> }
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+<span style="color:#00f">type</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+
+<span style="color:#008000">-- | Our Handle is empty, but usually other dependencies are stored here</span>
+<span style="color:#00f">data</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Handle</span>
+
+<span style="color:#008000">-- | Constructor for Handle</span>
+new <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span>
+new <span style="color:#00f">=</span> <span style="color:#2b91af">Handle</span>
+
+<span style="color:#008000">-- | This is some concrete implementation.</span>
+<span style="color:#008000">-- In this example we return a constant value.</span>
+getWeatherData <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherData</span>
+getWeatherData <span style="color:#00f">_</span> <span style="color:#00f">_</span> <span style="color:#00f">_</span> <span style="color:#00f">=</span> return $ <span style="color:#2b91af">WeatherData</span> 30
+</code></pre></td></tr></table>
+</div>
+</div><p>We have wrapped our service with the Handle interface. It&rsquo;s not possible to have multiple implementations yet, but we got an interface of the service and can hide all the dependencies of the service into Handle.</p>
+<h3 id="handle-with-records-records-handlehttpsgithubcomak3nhandle-examplestreemainrecords-handle">Handle with records [<a href="https://github.com/ak3n/handle-examples/tree/main/records-handle">records-handle</a>]&nbsp;<a class="headline-hash" href="#handle-with-records-records-handlehttpsgithubcomak3nhandle-examplestreemainrecords-handle">#</a> </h3>
+<p>The approach with records is described in the aforementioned posts. Records are used as a dictionary with functions just like dictionary passing with type classes but explicitly. <code>WeatherReporter</code> module stays the same — it continues to use <code>WeatherProvider.Handle</code> while the <code>WeatherProvider</code> becomes an interface:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> WeatherProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Temperature</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Int</span>
+<span style="color:#00f">data</span> <span style="color:#2b91af">WeatherData</span> <span style="color:#00f">=</span> <span style="color:#2b91af">WeatherData</span> { temperature <span style="color:#00f">::</span> <span style="color:#2b91af">Temperature</span> }
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+<span style="color:#00f">type</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+
+<span style="color:#008000">-- | The interface of `WeatherProvider` with available methods.</span>
+<span style="color:#00f">data</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Handle</span> { getWeatherData <span style="color:#00f">::</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherData</span> }
+</code></pre></td></tr></table>
+</div>
+</div><p>The good thing is that we do not need to change our domain logic at all since <code>getWeatherData :: Handle -&gt; Location -&gt; Day -&gt; IO WeatherData</code> has the same type. The interface allows us to create a concrete implementation for the application:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> SuperWeatherProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">import</span> WeatherProvider
+
+new <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span>
+new <span style="color:#00f">=</span> <span style="color:#2b91af">Handle</span> { getWeatherData <span style="color:#00f">=</span> getSuperWeatherData }
+
+<span style="color:#008000">-- | This is some concrete implementation `WeatherProvider` interface</span>
+getSuperWeatherData <span style="color:#00f">::</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherData</span>
+getSuperWeatherData <span style="color:#00f">_</span> <span style="color:#00f">_</span> <span style="color:#00f">=</span> return $ <span style="color:#2b91af">WeatherData</span> 30
+</code></pre></td></tr></table>
+</div>
+</div><p>And the stub for testing that we can control:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> TestWeatherProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">import</span> WeatherProvider
+
+<span style="color:#008000">-- | This is a configuration that allows to setup the provider for tests.</span>
+<span style="color:#00f">data</span> <span style="color:#2b91af">Config</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Config</span> { initTemperature <span style="color:#00f">::</span> <span style="color:#2b91af">Temperature</span> }
+
+new <span style="color:#00f">::</span> <span style="color:#2b91af">Config</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Handle</span>
+new config <span style="color:#00f">=</span> <span style="color:#2b91af">Handle</span> { getWeatherData <span style="color:#00f">=</span> getTestWeatherData $ initTemperature config }
+
+<span style="color:#008000">-- | This is an implementation `WeatherProvider` interface for tests</span>
+getTestWeatherData <span style="color:#00f">::</span> <span style="color:#2b91af">Int</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherData</span>
+getTestWeatherData temp <span style="color:#00f">_</span> <span style="color:#00f">_</span> <span style="color:#00f">=</span> return $ <span style="color:#2b91af">WeatherData</span> temp
+</code></pre></td></tr></table>
+</div>
+</div><p>The downside of this approach is the cost of an unknown function call mentioned in <a href="https://www.schoolofhaskell.com/user/meiersi/the-service-pattern">&ldquo;The Service Pattern&rdquo;</a> post:</p>
+<blockquote>
+<p>In terms of call overhead, we pay the cost of an unknown function call, which is probably a bit slower than a virtual method invocation in an OOP langauge like Java. If this becomes a performance bottleneck, we will have to avoid the abstraction and specialize at compile time. Backpack will allow us to do this in a principled fashion without losing modularity.</p>
+</blockquote>
+<p>Here is the STG of <code>WeatherReporter</code>:</p>
+<pre><code>weatherProvider =
+    \r [ds_s1C4] case ds_s1C4 of { Handle ds1_s1C6 -&gt; ds1_s1C6; };
+
+new = \r [eta_B1] Handle [eta_B1];
+
+createWeatherReport1 = &quot;The current temperature in London is &quot;#;
+
+$wcreateWeatherReport =
+    \r [ww_s1C7]
+        let {
+          sat_s1Cd =
+              \u []
+                  case ww_s1C7 of {
+                    I# ww3_s1C9 -&gt;
+                        case $wshowSignedInt 0# ww3_s1C9 [] of {
+                          (#,#) ww5_s1Cb ww6_s1Cc -&gt; : [ww5_s1Cb ww6_s1Cc];
+                        };
+                  };
+        } in  unpackAppendCString# createWeatherReport1 sat_s1Cd;
+
+createWeatherReport =
+    \r [w_s1Ce]
+        case w_s1Ce of {
+          WeatherData ww1_s1Cg -&gt; $wcreateWeatherReport ww1_s1Cg;
+        };
+
+getCurrentWeatherReportInLondon5 = &quot;London&quot;#;
+
+getCurrentWeatherReportInLondon4 =
+    \u [] unpackCString# getCurrentWeatherReportInLondon5;
+
+getCurrentWeatherReportInLondon3 = &quot;now&quot;#;
+
+getCurrentWeatherReportInLondon2 =
+    \u [] unpackCString# getCurrentWeatherReportInLondon3;
+
+getCurrentWeatherReportInLondon1 =
+    \r [ds_s1Ch void_0E]
+        case ds_s1Ch of {
+          Handle wph_s1Ck -&gt;
+              case wph_s1Ck of {
+                Handle ds1_s1Cm -&gt;
+                    case
+                        ds1_s1Cm
+                            getCurrentWeatherReportInLondon4
+                            getCurrentWeatherReportInLondon2
+                            void#
+                    of
+                    { Unit# ipv1_s1Cp -&gt;
+                          let { sat_s1Cq = \u [] createWeatherReport ipv1_s1Cp;
+                          } in  Unit# [sat_s1Cq];
+                    };
+              };
+        };
+
+getCurrentWeatherReportInLondon =
+    \r [eta_B2 void_0E] getCurrentWeatherReportInLondon1 eta_B2 void#;
+
+Handle = \r [eta_B1] Handle [eta_B1];
+</code></pre><p><code>getCurrentWeatherReportInLondon</code> takes two arguments — the first one is <code>WeatherReporter</code>'s Handle dictionary which we pass to <code>getCurrentWeatherReportInLondon1</code>. We match on this dictionary to get <code>wph_s1Ck</code> — this is our <code>WeatherProvider</code>'s Handle. Matching on it we get <code>ds1_s1Cm</code> — <code>getWeatherData</code> function which is called with arguments: <code>getCurrentWeatherReportInLondon4 = &quot;London&quot;</code> and <code>getCurrentWeatherReportInLondon2 = &quot;now&quot;</code>.</p>
+<p>The result of <code>getWeatherData &quot;London&quot; &quot;now&quot; = ipv1_s1Cp</code> is then passed to <code>createWeatherReport</code> where we show the result in <code>$wcreateWeatherReport</code> and append it to <code>createWeatherReport1 = &quot;The current temperature in London is &quot;</code>.</p>
+<p>The STG looks as expected. There are two allocations: one in <code>getCurrentWeatherReportInLondon1</code> and the other one in <code>$wcreateWeatherReport</code>.</p>
+<h3 id="handle-with-backpack-backpack-handlehttpsgithubcomak3nhandle-examplestreemainbackpack-handle">Handle with Backpack [<a href="https://github.com/ak3n/handle-examples/tree/main/backpack-handle">backpack-handle</a>]&nbsp;<a class="headline-hash" href="#handle-with-backpack-backpack-handlehttpsgithubcomak3nhandle-examplestreemainbackpack-handle">#</a> </h3>
+<p><code>WeatherProvider</code> becomes a signature in the cabal file:</p>
+<pre><code>library domain
+  hs-source-dirs: domain
+  signatures:      WeatherProvider
+  exposed-modules: WeatherReporter
+  default-language: Haskell2010
+  build-depends:    base
+</code></pre><p>and we rename <code>WeatherProvider.hs</code> to <code>WeatherProvider.hsig</code> with a little change — instead of using a concrete type for <code>Temperature</code> we make it abstract and will instantiate in implementations.</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell">signature <span style="color:#2b91af">WeatherProvider</span> <span style="color:#00f">where</span>
+
+<span style="color:#00f">data</span> <span style="color:#2b91af">Temperature</span>
+<span style="color:#00f">instance</span> <span style="color:#2b91af">Show</span> <span style="color:#2b91af">Temperature</span>
+
+<span style="color:#00f">data</span> <span style="color:#2b91af">WeatherData</span> <span style="color:#00f">=</span> <span style="color:#2b91af">WeatherData</span> { temperature <span style="color:#00f">::</span> <span style="color:#2b91af">Temperature</span> }
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+<span style="color:#00f">type</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+
+<span style="color:#00f">data</span> <span style="color:#2b91af">Handle</span>
+
+<span style="color:#008000">-- | The interface of `WeatherProvider` with available methods.</span>
+getWeatherData <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherData</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>Our implementation module is almost the same as in the simple Handle case, but we have to follow the signature and export the same types. It&rsquo;s possible to move all common types to a different cabal library and import in the signature and the implementations.</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> SuperWeatherProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Temperature</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Int</span>
+<span style="color:#00f">data</span> <span style="color:#2b91af">WeatherData</span> <span style="color:#00f">=</span> <span style="color:#2b91af">WeatherData</span> { temperature <span style="color:#00f">::</span> <span style="color:#2b91af">Temperature</span> }
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+<span style="color:#00f">type</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+
+<span style="color:#008000">-- | Our Handle is empty, but usually other dependencies are stored here</span>
+<span style="color:#00f">data</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Handle</span>
+
+<span style="color:#008000">-- | Constructor for Handle</span>
+new <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span>
+new <span style="color:#00f">=</span> <span style="color:#2b91af">Handle</span>
+
+<span style="color:#008000">-- | This is some concrete implementation.</span>
+<span style="color:#008000">-- In this example we return a constant value.</span>
+getWeatherData <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherData</span>
+getWeatherData <span style="color:#00f">_</span> <span style="color:#00f">_</span> <span style="color:#00f">_</span> <span style="color:#00f">=</span> return $ <span style="color:#2b91af">WeatherData</span> 30
+</code></pre></td></tr></table>
+</div>
+</div><p>For tests we setup a configuration type to control the behavior:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> TestWeatherProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Temperature</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Int</span>
+<span style="color:#00f">data</span> <span style="color:#2b91af">WeatherData</span> <span style="color:#00f">=</span> <span style="color:#2b91af">WeatherData</span> { temperature <span style="color:#00f">::</span> <span style="color:#2b91af">Temperature</span> }
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+<span style="color:#00f">type</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+
+<span style="color:#008000">-- | This is a configuration that allows to setup the provider for tests.</span>
+<span style="color:#00f">data</span> <span style="color:#2b91af">Config</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Config</span> { initTemperature <span style="color:#00f">::</span> <span style="color:#2b91af">Temperature</span> }
+
+<span style="color:#00f">data</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Handle</span> { config <span style="color:#00f">::</span> <span style="color:#2b91af">Config</span> }
+
+new <span style="color:#00f">::</span> <span style="color:#2b91af">Config</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Handle</span>
+new <span style="color:#00f">=</span> <span style="color:#2b91af">Handle</span>
+
+<span style="color:#008000">-- | This is an implementation `WeatherProvider` interface for tests</span>
+getWeatherData <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherData</span>
+getWeatherData (<span style="color:#2b91af">Handle</span> conf) <span style="color:#00f">_</span> <span style="color:#00f">_</span> <span style="color:#00f">=</span> return $ <span style="color:#2b91af">WeatherData</span> $ initTemperature conf
+</code></pre></td></tr></table>
+</div>
+</div><p>Now we need to tell which module to use instead of <code>WeatherProvider</code> hole. There are two ways: by using mixins or by reexporting modules as <code>WeatherProvider</code> in the definition libraries:</p>
+<pre><code>library impl
+  hs-source-dirs: impl
+  exposed-modules: SuperWeatherProvider
+  reexported-modules: SuperWeatherProvider as WeatherProvider
+  default-language: Haskell2010
+  build-depends: base
+
+library test-impl
+  hs-source-dirs: test-impl
+  exposed-modules: TestWeatherProvider
+  reexported-modules: TestWeatherProvider as WeatherProvider
+  default-language: Haskell2010
+  build-depends: base
+
+executable backpack-handle-exe
+  main-is: Main.hs
+  build-depends: base, impl, domain
+  default-language: Haskell2010
+
+test-suite spec
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Test.hs
+  default-language: Haskell2010
+  build-depends: base, QuickCheck, hspec, domain, test-impl
+</code></pre><p>That&rsquo;s all. We do not need to change our domain logic or tests. Here is the STG of <code>WeatherReporter</code>:</p>
+<pre><code>weatherProvider =
+    \r [ds_s1Bq] case ds_s1Bq of { Handle ds1_s1Bs -&gt; ds1_s1Bs; };
+
+new = \r [eta_B1] Handle [eta_B1];
+
+createWeatherReport1 = &quot;The current temperature in London is &quot;#;
+
+$wcreateWeatherReport =
+    \r [ww_s1Bt]
+        let {
+          sat_s1Bz =
+              \u []
+                  case ww_s1Bt of {
+                    I# ww3_s1Bv -&gt;
+                        case $wshowSignedInt 0# ww3_s1Bv [] of {
+                          (#,#) ww5_s1Bx ww6_s1By -&gt; : [ww5_s1Bx ww6_s1By];
+                        };
+                  };
+        } in  unpackAppendCString# createWeatherReport1 sat_s1Bz;
+
+createWeatherReport =
+    \r [w_s1BA]
+        case w_s1BA of {
+          WeatherData ww1_s1BC -&gt; $wcreateWeatherReport ww1_s1BC;
+        };
+
+getCurrentWeatherReportInLondon3 =
+    \u []
+        case $wshowSignedInt 0# 30# [] of {
+          (#,#) ww5_s1BE ww6_s1BF -&gt; : [ww5_s1BE ww6_s1BF];
+        };
+
+getCurrentWeatherReportInLondon2 =
+    \u []
+        unpackAppendCString#
+            createWeatherReport1 getCurrentWeatherReportInLondon3;
+
+getCurrentWeatherReportInLondon1 =
+    \r [ds_s1BG void_0E]
+        case ds_s1BG of {
+          Handle _ -&gt; Unit# [getCurrentWeatherReportInLondon2];
+        };
+
+getCurrentWeatherReportInLondon =
+    \r [eta_B2 void_0E] getCurrentWeatherReportInLondon1 eta_B2 void#;
+
+Handle = \r [eta_B1] Handle [eta_B1];
+</code></pre><p>We can see that GHC inlined our constant implementation in the <code>getCurrentWeatherReportInLondon3</code> — we show <code>30</code> immediately.</p>
+<h3 id="handles-with-backpack-backpack-handleshttpsgithubcomak3nhandle-examplestreemainbackpack-handles">Handles with Backpack [<a href="https://github.com/ak3n/handle-examples/tree/main/backpack-handles">backpack-handles</a>]&nbsp;<a class="headline-hash" href="#handles-with-backpack-backpack-handleshttpsgithubcomak3nhandle-examplestreemainbackpack-handles">#</a> </h3>
+<p>I decided to go further and make <code>WeatherReporter</code> a signature as well. Turned out this step required more actions with libraries. Here is <code>WeatherReporter.hsig</code>:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell">signature <span style="color:#2b91af">WeatherReporter</span> <span style="color:#00f">where</span>
+
+<span style="color:#00f">import</span> <span style="color:#00f">qualified</span> WeatherProvider
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">WeatherReport</span> <span style="color:#00f">=</span> <span style="color:#2b91af">String</span>
+
+<span style="color:#00f">data</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Handle</span> { weatherProvider <span style="color:#00f">::</span> <span style="color:#2b91af">WeatherProvider</span>.<span style="color:#2b91af">Handle</span> }
+
+<span style="color:#008000">-- | This is domain logic. It uses `WeatherProvider` to get the actual data.</span>
+getCurrentWeatherReportInLondon <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherReport</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>Then we need to split the <code>domain</code> library into two because <code>WeatherReport</code> depends on <code>WeatherProvider</code>. I tried to implement them both with one implementation library but seems it&rsquo;s impossible. The structure of libraries becomes the following:</p>
+<pre><code>library domain-provider
+  hs-source-dirs: domain
+  signatures:      WeatherProvider
+  default-language: Haskell2010
+  build-depends:    base
+
+library domain-reporter
+  hs-source-dirs: domain
+  signatures:      WeatherReporter
+  default-language: Haskell2010
+  build-depends:    base, domain-provider
+
+library impl-provider
+  hs-source-dirs: impl
+  exposed-modules: SuperWeatherProvider
+  reexported-modules: SuperWeatherProvider as WeatherProvider
+  default-language: Haskell2010
+  build-depends:    base
+
+library impl-reporter
+  hs-source-dirs: impl
+  exposed-modules: SuperWeatherReporter
+  reexported-modules: SuperWeatherReporter as WeatherReporter
+  default-language: Haskell2010
+  build-depends:    base, domain-provider
+</code></pre><p>Instead of <code>domain</code> we have <code>domain-provider</code> and <code>domain-reporter</code>. It allows to depend on them individually and instantiate with different implementations. In <a href="https://github.com/ak3n/handle-examples/blob/main/backpack-handles/backpack-handles.cabal#L52">the example</a>, I have instantiated the provider with implementation from <code>test-impl</code> using the reporter from <code>impl-reporter</code>. This is useful if you want to gradually write tests for different parts of the logic.</p>
+<h3 id="handle-with-vinyl-vinyl-handlehttpsgithubcomak3nhandle-examplestreemainvinyl-handle">Handle with Vinyl [<a href="https://github.com/ak3n/handle-examples/tree/main/vinyl-handle">vinyl-handle</a>]&nbsp;<a class="headline-hash" href="#handle-with-vinyl-vinyl-handlehttpsgithubcomak3nhandle-examplestreemainvinyl-handle">#</a> </h3>
+<p>Suppose that we want to extend our <code>WeatherData</code> and return not only temperature but wind&rsquo;s speed too. We need to add a field to <code>WeatherData</code>:</p>
+<pre><code>data WeatherData = WeatherData { temperature :: T.Temperature, wind :: W.WindSpeed }
+</code></pre><p>But also we want to provide separate Handles for these values: <code>TemperatureProvider</code> and <code>WindProvider</code>. We can create these two providers and then duplicate their methods in <code>WeatherProvider</code>. That might work if there are no so many methods, but what if their number will grow?</p>
+<p>We know that records are nominally typed and can&rsquo;t be composed. There is a library called <a href="https://hackage.haskell.org/package/vinyl">vinyl</a> that provides structural records supporting merge operation. I recommend Jon Sterling&rsquo;s <a href="https://vimeo.com/102785458">talk on Vinyl</a> where you can learn why records are sheaves and other details on Vinyl.</p>
+<p>Let&rsquo;s explore what the Handle pattern will look like if we replace records with Vinyl records. We create our data providers <code>TemperatureProvider</code> and <code>WindProvider</code>:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> TemperatureProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">import</span> HandleRec
+<span style="color:#00f">import</span> QueryTypes
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Temperature</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Int</span>
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Methods</span> <span style="color:#00f">=</span> <span style="color:#2b91af">&#39;[ &#39;(&#34;getTemperatureData&#34;, (Location -&gt; Day -&gt; IO Temperature)) ]</span>
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">=</span> <span style="color:#2b91af">HandleRec</span> <span style="color:#2b91af">Methods</span>
+
+getTemperatureData <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">Temperature</span>
+getTemperatureData <span style="color:#00f">=</span> getMethod @<span style="color:#a31515">&#34;getTemperatureData&#34;</span>
+
+</code></pre></td></tr></table>
+</div>
+</div><div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> WindProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">import</span> HandleRec
+<span style="color:#00f">import</span> QueryTypes
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">WindSpeed</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Int</span>
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Methods</span> <span style="color:#00f">=</span> <span style="color:#2b91af">&#39;[ &#39;(&#34;getWindData&#34;, (Location -&gt; Day -&gt; IO WindSpeed)) ]</span>
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">=</span> <span style="color:#2b91af">HandleRec</span> <span style="color:#2b91af">Methods</span>
+
+getWindData <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WindSpeed</span>
+getWindData <span style="color:#00f">=</span> getMethod @<span style="color:#a31515">&#34;getWindData&#34;</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>Note that we provide <code>getTemperatureData</code> and <code>getWindData</code> functions which satisfy our Handle interface.</p>
+<p>We can compose them together and extend them to create <code>WeatherProvider</code>:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> WeatherProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">import</span> Data.Vinyl.TypeLevel
+<span style="color:#00f">import</span> HandleRec
+<span style="color:#00f">import</span> <span style="color:#00f">qualified</span> WindProvider <span style="color:#00f">as</span> W
+<span style="color:#00f">import</span> <span style="color:#00f">qualified</span> TemperatureProvider <span style="color:#00f">as</span> T
+<span style="color:#00f">import</span> QueryTypes
+
+<span style="color:#00f">data</span> <span style="color:#2b91af">WeatherData</span> <span style="color:#00f">=</span> <span style="color:#2b91af">WeatherData</span> { temperature <span style="color:#00f">::</span> <span style="color:#2b91af">T</span>.<span style="color:#2b91af">Temperature</span>, wind <span style="color:#00f">::</span> <span style="color:#2b91af">W</span>.<span style="color:#2b91af">WindSpeed</span> }
+
+<span style="color:#008000">-- We union the methods of providers and extend it with a common method.</span>
+<span style="color:#00f">type</span> <span style="color:#2b91af">Methods</span> <span style="color:#00f">=</span> <span style="color:#2b91af">&#39;[ &#39;(&#34;getWeatherData&#34;, (Location -&gt; Day -&gt; IO WeatherData))
+</span><span style="color:#2b91af">  ]</span> ++ <span style="color:#2b91af">W</span>.<span style="color:#2b91af">Methods</span> ++ <span style="color:#2b91af">T</span>.<span style="color:#2b91af">Methods</span>
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">=</span> <span style="color:#2b91af">HandleRec</span> <span style="color:#2b91af">Methods</span>
+
+getWeatherData <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherData</span>
+getWeatherData <span style="color:#00f">=</span> getMethod @<span style="color:#a31515">&#34;getWeatherData&#34;</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>Here is how our providers are implemented:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> SuperTemperatureProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">import</span> Data.Vinyl
+<span style="color:#00f">import</span> TemperatureProvider
+<span style="color:#00f">import</span> QueryTypes
+
+new <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span>
+new <span style="color:#00f">=</span> <span style="color:#2b91af">Field</span> getSuperTemperatureData <span style="color:#2b91af">:&amp;</span> <span style="color:#2b91af">RNil</span>
+
+getSuperTemperatureData <span style="color:#00f">::</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">Temperature</span>
+getSuperTemperatureData <span style="color:#00f">_</span> <span style="color:#00f">_</span> <span style="color:#00f">=</span> return 30
+</code></pre></td></tr></table>
+</div>
+</div><div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> SuperWindProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">import</span> Data.Vinyl
+<span style="color:#00f">import</span> WindProvider
+<span style="color:#00f">import</span> QueryTypes
+
+new <span style="color:#00f">::</span> <span style="color:#2b91af">Handle</span>
+new <span style="color:#00f">=</span> <span style="color:#2b91af">Field</span> getSuperWindData <span style="color:#2b91af">:&amp;</span> <span style="color:#2b91af">RNil</span>
+
+getSuperWindData <span style="color:#00f">::</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WindSpeed</span>
+getSuperWindData <span style="color:#00f">_</span> <span style="color:#00f">_</span> <span style="color:#00f">=</span> return 5
+</code></pre></td></tr></table>
+</div>
+</div><div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> SuperWeatherProvider <span style="color:#00f">where</span>
+
+<span style="color:#00f">import</span> Data.Vinyl
+<span style="color:#00f">import</span> WeatherProvider
+<span style="color:#00f">import</span> <span style="color:#00f">qualified</span> TemperatureProvider
+<span style="color:#00f">import</span> <span style="color:#00f">qualified</span> WindProvider
+<span style="color:#00f">import</span> QueryTypes
+
+new <span style="color:#00f">::</span> <span style="color:#2b91af">WindProvider</span>.<span style="color:#2b91af">Handle</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">TemperatureProvider</span>.<span style="color:#2b91af">Handle</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Handle</span>
+new wp tp <span style="color:#00f">=</span> <span style="color:#2b91af">Field</span> getSuperWeatherData <span style="color:#2b91af">:&amp;</span> <span style="color:#2b91af">RNil</span> &lt;+&gt; wp &lt;+&gt; tp
+
+<span style="color:#008000">-- | This is some concrete implementation `WeatherProvider` interface</span>
+getSuperWeatherData <span style="color:#00f">::</span> <span style="color:#2b91af">Location</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Day</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">IO</span> <span style="color:#2b91af">WeatherData</span>
+getSuperWeatherData <span style="color:#00f">_</span> <span style="color:#00f">_</span> <span style="color:#00f">=</span> return $ <span style="color:#2b91af">WeatherData</span> 30 10
+</code></pre></td></tr></table>
+</div>
+</div><p>The domain logic and tests stay the same thanks to the Handle interface. The STG of <code>WeatherReporter</code>:</p>
+<pre><code>createWeatherReport2 = &quot;The current temperature in London is &quot;#;
+
+createWeatherReport1 = &quot; and wind speed is &quot;#;
+
+$wcreateWeatherReport =
+    \r [ww_s2fz ww1_s2fA]
+        let {
+          sat_s2fN =
+              \u []
+                  case ww_s2fz of {
+                    I# ww3_s2fC -&gt;
+                        case $wshowSignedInt 0# ww3_s2fC [] of {
+                          (#,#) ww5_s2fE ww6_s2fF -&gt;
+                              let {
+                                sat_s2fM =
+                                    \s []
+                                        let {
+                                          sat_s2fL =
+                                              \u []
+                                                  case ww1_s2fA of {
+                                                    I# ww9_s2fH -&gt;
+                                                        case $wshowSignedInt 0# ww9_s2fH [] of {
+                                                          (#,#) ww11_s2fJ ww12_s2fK -&gt;
+                                                              : [ww11_s2fJ ww12_s2fK];
+                                                        };
+                                                  };
+                                        } in  unpackAppendCString# createWeatherReport1 sat_s2fL;
+                              } in  ++_$s++ sat_s2fM ww5_s2fE ww6_s2fF;
+                        };
+                  };
+        } in  unpackAppendCString# createWeatherReport2 sat_s2fN;
+
+createWeatherReport =
+    \r [w_s2fO]
+        case w_s2fO of {
+          WeatherData ww1_s2fQ ww2_s2fR -&gt;
+              $wcreateWeatherReport ww1_s2fQ ww2_s2fR;
+        };
+
+getCurrentWeatherReportInLondon5 = &quot;London&quot;#;
+
+getCurrentWeatherReportInLondon4 =
+    \u [] unpackCString# getCurrentWeatherReportInLondon5;
+
+getCurrentWeatherReportInLondon3 = &quot;now&quot;#;
+
+getCurrentWeatherReportInLondon2 =
+    \u [] unpackCString# getCurrentWeatherReportInLondon3;
+
+getCurrentWeatherReportInLondon1 =
+    \r [ds_s2fS void_0E]
+        case ds_s2fS of {
+          Handle wph_s2fV -&gt;
+              case wph_s2fV of {
+                :&amp; x1_s2fX _ -&gt;
+                    case x1_s2fX of {
+                      Field _ x2_s2g1 -&gt;
+                          case
+                              x2_s2g1
+                                  getCurrentWeatherReportInLondon4
+                                  getCurrentWeatherReportInLondon2
+                                  void#
+                          of
+                          { Unit# ipv1_s2g4 -&gt;
+                                let { sat_s2g5 = \u [] createWeatherReport ipv1_s2g4;
+                                } in  Unit# [sat_s2g5];
+                          };
+                    };
+              };
+        };
+
+getCurrentWeatherReportInLondon =
+    \r [eta_B2 void_0E] getCurrentWeatherReportInLondon1 eta_B2 void#;
+
+Handle = \r [eta_B1] Handle [eta_B1];
+</code></pre><p>As we can see there is not much vinyl-specific runtime overhead in this case — we pattern match on <code>wph_s2fV</code> and <code>x1_s2fX</code> to get the function <code>x2_s2g1</code>. But keep in mind that accessing an element is linear since Vinyl is based on HList and compilation time will grow because of type-level machinery. Vinyl can be replaced for an alternative with logarithmic complexity.</p>
+<h3 id="conclusions">Conclusions&nbsp;<a class="headline-hash" href="#conclusions">#</a> </h3>
+<p>No surprises here. Backpack works as expected specifying things at compile time. Vinyl allows to compose records and can be replaced with any <a href="https://github.com/danidiaz/red-black-record#alternatives">alternative</a>. The Handle pattern works since it&rsquo;s just a type signature  <code>... :: Handle -&gt; ...</code>.</p>
+<p>The Handle allows us to hide dependencies and to create interfaces, allowing us to easily replace the implementation without changes on the client-side — statically using Backpack for better performance or dynamically using records or alternatives in runtime (in first-class modules manner). Backpack might be too tedious for Handles that depend on each other but in simple cases, it introduces not much additional cost compared to records. And it&rsquo;s possible to mix them.</p>
+<p>This post inspired me to write a follow-up post on <a href="/thoughts-on-backpack-modules-and-records">Backpack, modules, and records</a>.</p>
+
+    </div>
+</section>
+
+    </body>
+
+    
+</html>

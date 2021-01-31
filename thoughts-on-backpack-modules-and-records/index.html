@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="https://fonts.googleapis.com/css?family=Ubuntu" rel="stylesheet">
+        <title>Thoughts on Backpack, modules, and records</title>
+        <link rel="stylesheet" href="/css/stylesheet.css">
+    </head>
+    <body>
+        <section id="page-title">
+            <h1><a href="/">¯\_(ツ)_/¯</a></h1>
+        </section>
+
+
+
+<section class="blog-post">
+    <h1>Thoughts on Backpack, modules, and records</h1>
+    <div class="blog-post-subheader">
+        January 31, 2021
+    </div>
+    <div class="blog-post-content">
+        <p>In <a href="/implementations-of-the-handle-pattern">&ldquo;Implementations of the Handle pattern&rdquo;</a>, I have explored how Backpack might be used for the Handle pattern. It helped me to take a better look at Backpack and reflect a bit on modules and records in Haskell.</p>
+<h3 id="whats-wrong-with-backpack">What&rsquo;s wrong with Backpack?&nbsp;<a class="headline-hash" href="#whats-wrong-with-backpack">#</a> </h3>
+<p>Backpack works as expected but there are downsides of the current implementation:</p>
+<ol>
+<li>It&rsquo;s <code>cabal</code>-only. It means it&rsquo;s hard to integrate it in any big project because developers tend to choose different build tools.</li>
+<li>It&rsquo;s not user-friendly — it may throw <a href="https://twitter.com/ak3n/status/1345358277803180034">some mysterious errors</a> without explaining what&rsquo;s going on. Or <a href="https://github.com/haskell/cabal/issues/5150">parse errors in mixins block</a>.</li>
+<li>It&rsquo;s not maintained. <code>git blame</code> tells that there was not much activity in Backpack modules in <code>cabal</code> repository for three years.</li>
+<li>It does not support mutual recursive modules, sealing, higher-order units, hierarchical modules, and other things. The functionality can be improved.</li>
+<li>It lacks documentation.</li>
+<li>It&rsquo;s <a href="https://github.com/NixOS/nixpkgs/issues/40128">not supported by Nix</a>. I don&rsquo;t think it&rsquo;s Backpack&rsquo;s problem but since Nix has become a very popular choice for Haskell&rsquo;s build infrastructure it&rsquo;s a strong blocker for Backpack&rsquo;s integration.</li>
+<li>It&rsquo;s not used. Even if we close the eyes on problems with cabal or nix, the developers don&rsquo;t use Backpack because it&rsquo;s too <a href="https://www.reddit.com/r/haskell/comments/7ea0qg/backpack_why_does_this_cabal_file_fail_to_build/dq46myo/">heavy-weight to use</a> and it&rsquo;s unidiomatic.</li>
+</ol>
+<p>These issues seem to be related: no users =&gt; bad support and bad support =&gt; no users. Backpack was an attempt to bring a subset of ML modules system to Haskell, the language with anti-modular features and a big amount of legacy code written in that style. In my opinion, that attempt failed. The ML modules system is about explicit manipulation of modules in the program by design — the style that most Haskell programmers seem to dislike.</p>
+<p>What&rsquo;s the point of having an unused feature which is unmaintained and unfinished then? I write this not to criticize Backpack, but to understand its future. It&rsquo;s a great project that explored the important design space. The aforementioned downsides can be fixed and improved. The real question is &ldquo;Should the community invest resources in that?&rdquo;</p>
+<h3 id="whats-in-the-proposals">What&rsquo;s in the proposals&nbsp;<a class="headline-hash" href="#whats-in-the-proposals">#</a> </h3>
+<p>I looked at <a href="https://github.com/ghc-proposals/ghc-proposals/">the GHC proposals</a> to see if there are any improvements of modularity in the future and, in my opinion, most proposals are focused on concrete problems instead of reflecting on the whole language. It may work well but also it may create inconsistency in the language.</p>
+<h4 id="qualifieddohttpsgithubcomghc-proposalsghc-proposalsblobmasterproposals0216-qualified-dorst"><a href="https://github.com/ghc-proposals/ghc-proposals/blob/master/proposals/0216-qualified-do.rst">QualifiedDo</a>&nbsp;<a class="headline-hash" href="#qualifieddohttpsgithubcomghc-proposalsghc-proposalsblobmasterproposals0216-qualified-dorst">#</a> </h4>
+<p><code>QualifiedDo</code> brings syntax sugar for overloading <code>do</code> notation:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#008000">{-# LANGUAGE LinearTypes #-}</span>
+<span style="color:#008000">{-# LANGUAGE NoImplicitPrelude #-}</span>
+<span style="color:#00f">module</span> Control.Monad.Linear (<span style="color:#2b91af">Monad</span>(..)) <span style="color:#00f">where</span>
+
+<span style="color:#00f">class</span> <span style="color:#2b91af">Monad</span> m <span style="color:#00f">where</span>
+  return <span style="color:#00f">::</span> a #-&gt; m a
+  (&gt;&gt;=) <span style="color:#00f">::</span> m a #-&gt; (a #-&gt; m b) #-&gt; mb
+
+<span style="color:#008000">-----------------</span>
+
+<span style="color:#00f">module</span> M <span style="color:#00f">where</span>
+
+<span style="color:#00f">import</span> <span style="color:#00f">qualified</span> Control.Monad.Linear <span style="color:#00f">as</span> Linear
+
+f <span style="color:#00f">::</span> <span style="color:#2b91af">Linear</span>.<span style="color:#2b91af">Monad</span> m <span style="color:#00f">=&gt;</span> a #-&gt; m b
+f a <span style="color:#00f">=</span> <span style="color:#2b91af">Linear</span>.<span style="color:#00f">do</span>
+  b <span style="color:#00f">&lt;-</span> someLinearFunction a <span style="color:#2b91af">Linear</span>.&gt;&gt;= someOtherLinearFunction
+  c <span style="color:#00f">&lt;-</span> anotherLinearFunction b
+  <span style="color:#2b91af">Linear</span>.return c
+
+g <span style="color:#00f">::</span> <span style="color:#2b91af">Monad</span> m <span style="color:#00f">=&gt;</span> a <span style="color:#00f">-&gt;</span> m b
+g a <span style="color:#00f">=</span> <span style="color:#00f">do</span>
+  b <span style="color:#00f">&lt;-</span> someNonLinearFunction a &gt;&gt;= someOtherNonLinearFunction
+  c <span style="color:#00f">&lt;-</span> anotherNonLinearFunction b
+  return c
+</code></pre></td></tr></table>
+</div>
+</div><p><code>Linear.do</code> overloads <code>return</code> and <code>(&gt;&gt;=)</code> with functions from <code>Control.Monad.Linear</code>. Hey, isn&rsquo;t this is why Backpack was created? To replace the implementation? Also, it can be achieved with records. And the authors used that solution in <a href="https://github.com/tweag/linear-base/blob/0d6165fbd8ad84dd1574a36071f00a6137351637/src/System/IO/Resource.hs#L119-L120">linear-base</a>:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell">(&lt;*&gt;) <span style="color:#00f">::</span> forall a b. <span style="color:#2b91af">RIO</span> (a -&gt;. b) -&gt;. <span style="color:#2b91af">RIO</span> a -&gt;. <span style="color:#2b91af">RIO</span> b
+f &lt;*&gt; x <span style="color:#00f">=</span> <span style="color:#00f">do</span>
+    f&#39; <span style="color:#00f">&lt;-</span> f
+    x&#39; <span style="color:#00f">&lt;-</span> x
+    <span style="color:#2b91af">Linear</span>.pure $ f&#39; x&#39;
+  <span style="color:#00f">where</span>
+    <span style="color:#2b91af">Linear</span>.<span style="color:#2b91af">Builder</span> { .. } <span style="color:#00f">=</span> <span style="color:#2b91af">Linear</span>.monadBuilder
+</code></pre></td></tr></table>
+</div>
+</div><p>The quote from the proposal:</p>
+<blockquote>
+<p>There is a way to emulate <code>-XQualifiedDo</code> in current GHC using <code>-XRecordWildcards</code>: have no <code>(&gt;&gt;=)</code> and such in scope, and import a builder with <code>Builder {..} = builder</code>. It is used in <code>linear-base</code>. This is not a very good solution: it is rather a impenetrable idiom, and, if a single function uses several builders, it yields syntactic contortion (which is why shadowing warnings are deactivated <a href="https://github.com/tweag/linear-base/blob/0d6165fbd8ad84dd1574a36071f00a6137351637/src/System/IO/Resource.hs#L1">here</a>)</p>
+</blockquote>
+<p>I don&rsquo;t mind about using records. It might be uncomfortable, but not worthing to patch the language. Maybe I&rsquo;m missing something important.</p>
+<p>At first glance, this syntactic extension may even look okay, but a more fundamental solution would be local modules support where you can open a module locally and bring its content into the scope:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell">(&lt;*&gt;) <span style="color:#00f">::</span> forall a b. <span style="color:#2b91af">RIO</span> (a -&gt;. b) -&gt;. <span style="color:#2b91af">RIO</span> a -&gt;. <span style="color:#2b91af">RIO</span> b
+f &lt;*&gt; x <span style="color:#00f">=</span> <span style="color:#00f">let</span> open <span style="color:#2b91af">Linear</span> <span style="color:#00f">in</span> <span style="color:#00f">do</span>
+  f&#39; <span style="color:#00f">&lt;-</span> f
+  x&#39; <span style="color:#00f">&lt;-</span> x
+  <span style="color:#2b91af">Linear</span>.pure $ f&#39; x&#39;
+</code></pre></td></tr></table>
+</div>
+</div><div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">7
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell">(&lt;*&gt;) <span style="color:#00f">::</span> forall a b. <span style="color:#2b91af">RIO</span> (a -&gt;. b) -&gt;. <span style="color:#2b91af">RIO</span> a -&gt;. <span style="color:#2b91af">RIO</span> b
+f &lt;*&gt; x <span style="color:#00f">=</span> <span style="color:#00f">do</span>
+    f&#39; <span style="color:#00f">&lt;-</span> f
+    x&#39; <span style="color:#00f">&lt;-</span> x
+    <span style="color:#2b91af">Linear</span>.pure $ f&#39; x&#39;
+  <span style="color:#00f">where</span>
+    { .. } <span style="color:#00f">=</span> open <span style="color:#2b91af">Linear</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>It&rsquo;s just like opening the records! It might be tedious to write these imports instead of <code>Linear.do</code>, but we wouldn&rsquo;t need to bring new functionality to the language if we had local imports. Maybe it means that &ldquo;do notation&rdquo; is really important to the Haskell community but to me, it feels like a temporary hack at the moment, not a fundamental part of the language.</p>
+<h4 id="local-moduleshttpsgithubcomgoldfirereghc-proposalsbloblocal-modulesproposals0000-local-modulesrst"><a href="https://github.com/goldfirere/ghc-proposals/blob/local-modules/proposals/0000-local-modules.rst">Local modules</a>&nbsp;<a class="headline-hash" href="#local-moduleshttpsgithubcomgoldfirereghc-proposalsbloblocal-modulesproposals0000-local-modulesrst">#</a> </h4>
+<p><code>LocalModules</code> sounds like a good step in the right direction. It will be possible to create modules in modules and to open them locally! Just like in the example above with <code>Linear</code> module. Another good thing is that each <code>data</code> declaration implicitly creates a new local module, <a href="https://agda.readthedocs.io/en/v2.6.1/language/record-types.html#record-modules">like in Agda</a>. I&rsquo;m not sure if it&rsquo;s possible to open them, I haven&rsquo;t found it in the proposal, but that would unify the opening of records and modules. Unfortunately, the proposal doesn&rsquo;t explore the interaction with Backpack:</p>
+<blockquote>
+<p>This proposal does not appear to interact with Backpack. It does not address signatures, the key feature in Backpack. Perhaps the ideas here could be extended to work with signatures.</p>
+</blockquote>
+<p>Does it mean that there will be <code>LocalSignatures</code> in the future? Why not design the whole mechanism at once? Is there a risk of missing something important that would be hard to fix later?</p>
+<h4 id="first-class-moduleshttpsgithubcommichaelpjghc-proposalsblobimpfirst-class-modulesproposals0000-first-class-modulesrst"><a href="https://github.com/michaelpj/ghc-proposals/blob/imp/first-class-modules/proposals/0000-first-class-modules.rst">First class modules</a>&nbsp;<a class="headline-hash" href="#first-class-moduleshttpsgithubcommichaelpjghc-proposalsblobimpfirst-class-modulesproposals0000-first-class-modulesrst">#</a> </h4>
+<p>This proposal is about making a module a first-class entity in the language. Its status is <em>dormant</em> because it&rsquo;s too much to change while the benefits seem to be the same as in <code>LocalModules</code>. While <code>LocalModules</code> is a technical proposal that goes into details, <code>First class modules</code> is more about language design proposal. <code>LocalModules</code> does not replace <code>First class modules</code>, but <em>a part of it</em>. This is exactly what I was looking for, the proposal that tries to build a vision for the language, what it might look in the future. The proposal mentions Backpack only once:</p>
+<blockquote>
+<p>Interface files must be able to handle the possibility that an exported name refers to a module. This may have some interaction with Backpack.</p>
+</blockquote>
+<p>Unfortunately, the work on this proposal was stopped because most interesting things were described in <code>LocalModules</code> — a proposal that is about <em>local namespaces</em>, not <em>modules</em>. There is nothing about abstraction there.</p>
+<h4 id="summing-up">Summing up&nbsp;<a class="headline-hash" href="#summing-up">#</a> </h4>
+<p>It&rsquo;s important to remember that Haskell modules are just namespaces without any additional features. It&rsquo;s possible to import the contents of a module, everything or only specific things, and control what to export (except instances). While <code>LocalModules</code> will significantly improve developers&rsquo; lives providing a flexible way to deal with scopes, it&rsquo;s unclear what the whole picture with modules will look like. And why Backpack is ignored by the proposals? What&rsquo;s wrong with it?</p>
+<p>The Backpack is ignored because it&rsquo;s not a proper part of the Haskell language. It&rsquo;s a mechanism that consists of <em>mixin linking</em> which is indifferent to Haskell source code, and <em>typechecking against interfaces</em>, which is purely the concern of the compiler. That&rsquo;s why it depends so much on Cabal — a frontend client for mixins description which can be replaced the compiler supports typechecking of interfaces. More details are available in Edward Z. Yang&rsquo;s <a href="https://github.com/ezyang/thesis/releases/tag/rev20170925">thesis</a>.</p>
+<h3 id="modules-and-records-and-type-classes">Modules and records, and type classes&nbsp;<a class="headline-hash" href="#modules-and-records-and-type-classes">#</a> </h3>
+<p>We understood that Backpack is a tool that uses the compiler and the package manager to express the features that are not supported in the language internally. Is it possible for Haskell to go further and improve the modularity in the language internally? To fit together anti-modular type classes and some subset of modules with abstract types? I want to explore what&rsquo;s in the ML languages at first.</p>
+<h4 id="whats-in-the-ml-land">What&rsquo;s in the ML land&nbsp;<a class="headline-hash" href="#whats-in-the-ml-land">#</a> </h4>
+<p>Let&rsquo;s take a look at what happens in languages with the ML modules system. The users of these languages accept the cost of the explicitness. Although, they would be glad to reduce the boilerplate when it&rsquo;s necessary.</p>
+<p>The theoretical works demonstrate that type classes and modules are not that different. <a href="https://github.com/ak3n/modules-papers/blob/master/pdfs/Wehr_ML_modules_and_Haskell_type_classes.pdf">&ldquo;ML Modules and Haskell Type Classes: A Constructive Comparison&rdquo;</a> showed that a subset of Haskell with type classes can be expressed with ML modules and vice versa with some limitations. <a href="https://github.com/ak3n/modules-papers/blob/master/pdfs/main-long.pdf">&ldquo;Modular Type Classes&rdquo;</a> went further in expressing type classes with modules. It starts with modules as the fundamental concept and then recovers type classes as a particular mode of use of modularity.</p>
+<p>The example of bringing type classes to the language with modules can be found in <a href="https://arxiv.org/abs/1512.01895">&ldquo;Modular implicits&rdquo;</a> — an extension to the OCaml language for ad-hoc polymorphism inspired by Scala implicits and modular type classes. It&rsquo;s not supported by mainstream OCaml yet because the proper implementation requires a big change in the language. But here is a small example of how it might look for the <code>Show</code> type class:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">30
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">31
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">32
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">33
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">34
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">35
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">36
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">37
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">38
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">39
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">40
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">41
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">42
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">43
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">44
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">45
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">46
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">47
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">48
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">49
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">50
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">51
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">52
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">53
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">54
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">55
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">56
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">57
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">58
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">59
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">60
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">61
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">62
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-ocaml" data-lang="ocaml"><span style="color:#008000">(*
+</span><span style="color:#008000">  We express `Show` as a module type. It&#39;s a module signature that
+</span><span style="color:#008000">  can be instantiated with different implementations. It has an
+</span><span style="color:#008000">  abstract type `t` and a function `show` that takes `t` and returns `string`.
+</span><span style="color:#008000">
+</span><span style="color:#008000">  class Show t where
+</span><span style="color:#008000">    show :: t -&gt; String
+</span><span style="color:#008000">*)</span>
+<span style="color:#00f">module</span> <span style="color:#00f">type</span> <span style="color:#2b91af">Show</span> = <span style="color:#00f">sig</span>
+  <span style="color:#00f">type</span> t
+  <span style="color:#00f">val</span> show : t -&gt; <span style="color:#2b91af">string</span>
+<span style="color:#00f">end</span>
+
+<span style="color:#008000">(*
+</span><span style="color:#008000">  This is a global function `show` with an implicit argument `S : Show`.
+</span><span style="color:#008000">  It means that it takes a module that implements the module type `Show`,
+</span><span style="color:#008000">  an argument `x`, and calls `S.show x` using the `show` from `S`.
+</span><span style="color:#008000">
+</span><span style="color:#008000">  show&#39; :: Show a =&gt; a -&gt; String
+</span><span style="color:#008000">  show&#39; = show
+</span><span style="color:#008000">*)</span>
+<span style="color:#00f">let</span> show {<span style="color:#2b91af">S</span> : <span style="color:#2b91af">Show</span>} x = S.show x
+
+<span style="color:#008000">(*
+</span><span style="color:#008000">  An implementation of `Show` for `int`.
+</span><span style="color:#008000">
+</span><span style="color:#008000">  instance Show Int where
+</span><span style="color:#008000">    show = string_of_int
+</span><span style="color:#008000">*)</span>
+implicit <span style="color:#00f">module</span> <span style="color:#2b91af">Show_int</span> = <span style="color:#00f">struct</span>
+  <span style="color:#00f">type</span> t = <span style="color:#2b91af">int</span>
+  <span style="color:#00f">let</span> show x = string_of_int x
+<span style="color:#00f">end</span>
+
+<span style="color:#008000">(*
+</span><span style="color:#008000">  An implementation of `Show` for `float`.
+</span><span style="color:#008000">
+</span><span style="color:#008000">  instance Show Float where
+</span><span style="color:#008000">    show = string_of_float
+</span><span style="color:#008000">*)</span>
+implicit <span style="color:#00f">module</span> <span style="color:#2b91af">Show_float</span> = <span style="color:#00f">struct</span>
+  <span style="color:#00f">type</span> t = <span style="color:#2b91af">float</span>
+  <span style="color:#00f">let</span> show x = string_of_float x
+<span style="color:#00f">end</span>
+
+<span style="color:#008000">(*
+</span><span style="color:#008000">  An implementation of `Show` for `list`.
+</span><span style="color:#008000">  Since `list` contains elements of some type `t` we require
+</span><span style="color:#008000">  a module `S` to show them.
+</span><span style="color:#008000">
+</span><span style="color:#008000">  instance Show a =&gt; Show [a] where
+</span><span style="color:#008000">    show = string_of_list show
+</span><span style="color:#008000">*)</span>
+implicit <span style="color:#00f">module</span> <span style="color:#2b91af">Show_list</span> {<span style="color:#2b91af">S</span> : <span style="color:#2b91af">Show</span>} = <span style="color:#00f">struct</span>
+  <span style="color:#00f">type</span> t = S.t <span style="color:#2b91af">list</span>
+  <span style="color:#00f">let</span> show x = string_of_list S.show x
+<span style="color:#00f">end</span>
+
+<span style="color:#00f">let</span> () =
+  print_endline (<span style="color:#a31515">&#34;Show an int: &#34;</span> ^ show 5);
+  print_endline (<span style="color:#a31515">&#34;Show a float: &#34;</span> ^ show 1.5);
+  print_endline (<span style="color:#a31515">&#34;Show a list of ints: &#34;</span> ^ show [1; 2; 3]);
+</code></pre></td></tr></table>
+</div>
+</div><p>As we can see the languages with ML modules system can get ad-hoc programming support to some degree.</p>
+<h4 id="why-modularity">Why modularity?&nbsp;<a class="headline-hash" href="#why-modularity">#</a> </h4>
+<p>Haskell&rsquo;s culture relies heavily on type classes. It&rsquo;s a foundation for monads, do-notation, and libraries. All instances of type classes should be unique and it&rsquo;s a cultural belief because the <em>global uniqueness of instances</em> is <a href="http://blog.ezyang.com/2014/07/type-classes-confluence-coherence-global-uniqueness/">just an expectation that isn&rsquo;t forced by GHC</a>. What&rsquo;s the point of living in an anti-modular myth that forbids the integration of possible modularity features?</p>
+<blockquote>
+<p>It is easy to dismiss this example as an implementation wart in GHC, and continue pretending that global uniqueness of instances holds. However, the problem with global uniqueness of instances is that they are inherently nonmodular: you might find yourself unable to compose two components because they accidentally defined the same type class instance, even though these instances are plumbed deep in the implementation details of the components. This is a big problem for Backpack, or really any module system, whose mantra of separate modular development seeks to guarantee that linking will succeed if the library writer and the application writer develop to a common signature.</p>
+</blockquote>
+<p>The example with <code>QualifiedDo</code> shows that even one of the key features of Haskell needs modularity — monads and do-notation. That required additional patching of the language because do-notation is based on type classes instead of modules.</p>
+<p><code>LocalModules</code> may help to deal with scopes (it&rsquo;s really annoying sometimes), but they won&rsquo;t provide the abstraction mechanism — the key feature of a module system. Modules with abstract types allow replacing the implementations because of Reynolds’s abstraction theorem.</p>
+<p>Type classes allow to create interfaces and implement them for different types, but they are usually global and ad-hoc. They make the project, the libraries, and the whole Hackage into one global world. Not always in practice for now, but it can be very annoying to track the import statement that brings an instance into the scope especially in a big codebase. Type classes become too expensive at some point as an abstraction tool.</p>
+<h4 id="local-signatures">Local signatures&nbsp;<a class="headline-hash" href="#local-signatures">#</a> </h4>
+<p>I wrote <code>LocalSignatures</code> as a joke when was writing about <code>LocalModules</code>, but then later I understood that it might work since GHC already supports type checking against interfaces it can be used to implement signatures on the language level. It might require lots of syntax changes though. Something like that:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-haskell" data-lang="haskell"><span style="color:#00f">module</span> <span style="">type</span> EQ <span style="color:#00f">where</span>
+  <span style="color:#00f">data</span> <span style="color:#2b91af">T</span>
+  eq <span style="color:#00f">::</span> <span style="color:#2b91af">T</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">T</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Bool</span>
+
+<span style="color:#00f">module</span> <span style="">type</span> MAP <span style="color:#00f">where</span>
+  <span style="color:#00f">data</span> <span style="color:#2b91af">Key</span>
+  <span style="color:#00f">data</span> <span style="color:#2b91af">Map</span> a
+  empty <span style="color:#00f">::</span> <span style="color:#2b91af">Map</span> a
+  lookup <span style="color:#00f">::</span> <span style="color:#2b91af">Key</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Map</span> a <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Maybe</span> a
+  add <span style="color:#00f">::</span> <span style="color:#2b91af">Key</span> <span style="color:#00f">-&gt;</span> a <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Map</span> a <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Map</span> a
+
+<span style="color:#00f">module</span> Map (<span style="color:#2b91af">Key</span> :: <span style="color:#2b91af">EQ</span>) as <span style="color:#2b91af">MAP</span> with (<span style="color:#00f">type</span> <span style="color:#2b91af">Key</span> as <span style="color:#2b91af">Key</span>.<span style="color:#2b91af">T</span>) <span style="color:#00f">where</span>
+  <span style="color:#00f">type</span> <span style="color:#2b91af">Key</span> <span style="color:#00f">=</span> <span style="color:#2b91af">Key</span>.<span style="color:#2b91af">T</span>
+  <span style="color:#00f">type</span> <span style="color:#2b91af">Map</span> a <span style="color:#00f">=</span> <span style="color:#2b91af">Key</span> <span style="color:#00f">-&gt;</span> <span style="color:#2b91af">Maybe</span> a
+  empty x <span style="color:#00f">=</span> <span style="color:#2b91af">Nothing</span>
+  lookup x m <span style="color:#00f">=</span> m x
+  add x y m <span style="color:#00f">=</span> \z <span style="color:#00f">-&gt;</span> <span style="color:#00f">if</span> <span style="color:#2b91af">Key</span>.eq z x <span style="color:#00f">then</span> <span style="color:#2b91af">Just</span> y <span style="color:#00f">else</span> m z
+</code></pre></td></tr></table>
+</div>
+</div><p>We have created two signatures (module types) <code>EQ</code> and <code>MAP</code>. And a module <code>Map</code> that implements <code>MAP</code>. Writing <code>as MAP</code>, we seal the module <code>Map</code> and hide the implementation details behind the signature <code>MAP</code>, specifying that <code>Key.T</code> is the same as <code>Key</code>.</p>
+<p>This is just an example to demonstrate how it might look like. It introduces a module system to the language but on a different level. We can&rsquo;t pass a module to a function — modules and core terms are separated.</p>
+<h4 id="modules-and-records">Modules and records&nbsp;<a class="headline-hash" href="#modules-and-records">#</a> </h4>
+<p>The Handle pattern demonstrates that Haskell&rsquo;s modules and records are alike in some way — they implement the Handle interface provided to the user, both containing functions. Records are dynamic and can be replaced in the runtime while signatures are static and can be specialized during the compilation. What if we could merge them into one entity?</p>
+<p><a href="https://github.com/ak3n/modules-papers/blob/master/pdfs/1ml-jfp-draft.pdf">1ML</a> does that — it merges two languages in one: <em>core</em> with types and expressions, and <em>modules</em>, with signatures, structures and functors. And requires only System Fω. The example for local signatures mentioned above is the code I adapted from 1ML. Here is the original version:</p>
+<div class="highlight"><div style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4">
+<table style="border-spacing:0;padding:0;margin:0;border:0;width:auto;overflow:auto;display:block;"><tr><td style="vertical-align:top;padding:0;margin:0;border:0;">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 1
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 2
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 3
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 4
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 5
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 6
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 7
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 8
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f"> 9
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">10
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">11
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">12
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">13
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">14
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">15
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">16
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">17
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">18
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">19
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">20
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">21
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">22
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">23
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">24
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">25
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">26
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">27
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">28
+</span><span style="margin-right:0.4em;padding:0 0.4em 0 0.4em;color:#7f7f7f">29
+</span></code></pre></td>
+<td style="vertical-align:top;padding:0;margin:0;border:0;;width:100%">
+<pre style="background-color:#fff;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-ocaml" data-lang="ocaml"><span style="color:#00f">type</span> <span style="color:#2b91af">EQ</span> =
+{
+  <span style="color:#00f">type</span> t;
+  eq : t -&gt; t -&gt; <span style="color:#2b91af">bool</span>;
+};
+
+<span style="color:#00f">type</span> <span style="color:#2b91af">MAP</span> =
+{
+  <span style="color:#00f">type</span> key;
+  <span style="color:#00f">type</span> map a;
+  empty <span style="color:#00f">&#39;</span>a : map a;
+  lookup <span style="color:#00f">&#39;</span>a : key -&gt; map a -&gt; opt a;
+  add <span style="color:#00f">&#39;</span>a : key -&gt; a -&gt; map a -&gt; map a;
+};
+
+<span style="color:#2b91af">Map</span> (<span style="color:#2b91af">Key</span> : <span style="color:#2b91af">EQ</span>) :&gt; <span style="color:#2b91af">MAP</span> <span style="color:#00f">with</span> (<span style="color:#00f">type</span> key = Key.t) =
+{
+  <span style="color:#00f">type</span> key = Key.t;
+  <span style="color:#00f">type</span> map a = key -&gt; opt a;
+  empty = <span style="color:#00f">fun</span> x =&gt; none;
+  lookup x m = m x;
+  add x y m = <span style="color:#00f">fun</span> z =&gt; <span style="color:#00f">if</span> Key.eq z x <span style="color:#00f">then</span> some y <span style="color:#00f">else</span> m z;
+};
+
+datasize = 117;
+<span style="color:#2b91af">OrderedMap</span> = <span style="color:#2b91af">Map</span> {<span style="color:#00f">include</span> <span style="color:#2b91af">Int</span>; eq = curry (==)} :&gt; <span style="color:#2b91af">MAP</span>;
+<span style="color:#2b91af">HashMap</span> = <span style="color:#2b91af">Map</span> {<span style="color:#00f">include</span> <span style="color:#2b91af">Int</span>; eq = curry (==)} :&gt; <span style="color:#2b91af">MAP</span>;
+
+<span style="color:#2b91af">Map</span> = <span style="color:#00f">if</span> datasize &lt;= 100 <span style="color:#00f">then</span> <span style="color:#2b91af">OrderedMap</span> <span style="color:#00f">else</span> <span style="color:#2b91af">HashMap</span> : <span style="color:#2b91af">MAP</span>;
+</code></pre></td></tr></table>
+</div>
+</div><p>Looks similar, but now we can choose what module to use by analyzing the runtime value similar to what can be done in Haskell with records, vinyl, or something else. But they lack the abstract types support.</p>
+<h3 id="conclusions">Conclusions&nbsp;<a class="headline-hash" href="#conclusions">#</a> </h3>
+<p>I haven&rsquo;t thought about how local signatures or first-class modules may interact with type classes to achieve the same experience as with implicits in Agda, Scala, or OCaml. According to <a href="https://lirias.kuleuven.be/2343745">the recent paper on new implicits calculus</a>, implicits don&rsquo;t have global uniqueness of instances, just GHC&rsquo;s type classes in practice, but have coherence and stability of type substitutions. It makes me wonder why not try to drop the global uniqueness property and improve the module system instead.</p>
+<p>The recently created <a href="https://haskell.foundation/en/">Haskell Foundation</a> states that it&rsquo;s going to address the need for <em>driving adoption</em>. It means more developers will write Haskell, more libraries, more projects, more type classes, and more instances that are <em>global</em> for the entire Hackage. I think it&rsquo;s important to decide what to do with Backpack, consider the improvement of the module system, and design the language more carefully taking in mind the whole picture.</p>
+
+    </div>
+</section>
+
+    </body>
+
+    
+</html>

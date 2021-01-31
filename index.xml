@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>ak3n.com</title>
+    <link>http://ak3n.com/</link>
+    <description>Recent content on ak3n.com</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    
+	<atom:link href="http://ak3n.com/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Implementations of the Handle pattern</title>
+      <link>http://ak3n.com/implementations-of-the-handle-pattern/</link>
+      <pubDate>Sun, 31 Jan 2021 00:00:00 +0000</pubDate>
+      
+      <guid>http://ak3n.com/implementations-of-the-handle-pattern/</guid>
+      <description>In &amp;ldquo;Monad Transformers and Effects with Backpack&amp;rdquo;, @acid2 presented how to apply Backpack to monad transformers. There is a less-popular approach to deal with effects — Handle (Service) pattern. I recommend reading both posts at first since they answer many questions regarding the design decisions behind the Handle pattern (why IO, why not type classes, etc). In this post, I want to show different implementations of the Handle pattern and compare them.</description>
+    </item>
+    
+    <item>
+      <title>Thoughts on Backpack, modules, and records</title>
+      <link>http://ak3n.com/thoughts-on-backpack-modules-and-records/</link>
+      <pubDate>Sun, 31 Jan 2021 00:00:00 +0000</pubDate>
+      
+      <guid>http://ak3n.com/thoughts-on-backpack-modules-and-records/</guid>
+      <description>In &amp;ldquo;Implementations of the Handle pattern&amp;rdquo;, I have explored how Backpack might be used for the Handle pattern. It helped me to take a better look at Backpack and reflect a bit on modules and records in Haskell.
+What&amp;rsquo;s wrong with Backpack? Backpack works as expected but there are downsides of the current implementation:
+ It&amp;rsquo;s cabal-only. It means it&amp;rsquo;s hard to integrate it in any big project because developers tend to choose different build tools.</description>
+    </item>
+    
+  </channel>
+</rss>
