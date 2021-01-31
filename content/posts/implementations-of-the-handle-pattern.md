@@ -655,4 +655,4 @@ No surprises here. Backpack works as expected specifying things at compile time.
 
 The Handle allows us to hide dependencies and to create interfaces, allowing us to easily replace the implementation without changes on the client-side — statically using Backpack for better performance or dynamically using records or alternatives in runtime (in first-class modules manner). Backpack might be too tedious for Handles that depend on each other but in simple cases, it introduces not much additional cost compared to records. And it's possible to mix them.
 
-This post inspired me to write a follow-up post on [Backpack, modules, and records](/thoughts-on-backpack-modules-and-records).
+This post inspired me to write a follow-up post on [Backpack, modules, and records](/posts/thoughts-on-backpack-modules-and-records).
